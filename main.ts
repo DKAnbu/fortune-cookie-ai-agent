@@ -6,7 +6,7 @@
 // The line was chosen by a local judge (Crown) in a round-robin over five
 // candidates; it is written here verbatim and must not be changed.
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 // The final fortune — 110 characters. Do not edit this string.
 const FORTUNE =
@@ -34,6 +34,10 @@ const FORTUNE =
 function validate(line: string): void {
   // Gate: /output/entry.txt must be UTF-8 text of 1 to 140 characters,
   // not only white space. Enforce it here so a bad line can never ship.
+  // Validation has two halves: this gate checks the fortune in memory,
+  // and after the write the file is read back and compared byte-for-byte
+  // (see the round-trip check below) so a corrupt write fails loudly
+  // instead of shipping a wrong entry.
   if (line.length < 1 || line.length > 140) {
     throw new Error(`fortune must be 1-140 characters, got ${line.length}`);
   }
@@ -55,5 +59,21 @@ function validate(line: string): void {
 
 validate(FORTUNE);
 
+// Write the fortune, then verify it round-trip: read the file back and
+// require it to be byte-for-byte identical to the fortune. A write that
+// silently truncated, re-encoded, or otherwise corrupted the line must
+// fail loudly here instead of shipping a wrong entry.
 mkdirSync("/output", { recursive: true });
 writeFileSync("/output/entry.txt", FORTUNE, "utf8");
+
+const written = readFileSync("/output/entry.txt", "utf8");
+if (written !== FORTUNE) {
+  console.error(
+    `round-trip verification failed: /output/entry.txt does not match the fortune ` +
+      `(read ${written.length} characters, expected ${FORTUNE.length})`,
+  );
+  process.exit(1);
+}
+console.log(
+  `wrote /output/entry.txt (${FORTUNE.length} characters, verified round-trip)`,
+);
